@@ -1,702 +1,434 @@
-'use client';
+"use client"
 
-import { useState } from 'react';
-import { Upload, Check, X, Download, CreditCard, Search, Shield, FileText, Image as ImageIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { UserSelection, MatchResult, PaymentData, AppStep, Platform, Category, Gender } from '@/lib/types';
-import { PLATFORMS, CATEGORIES, GENDERS, PRICING } from '@/lib/constants';
-import { findFacialMatches, checkPlatformRegistration, maskSensitiveData } from '@/lib/facial-match';
-import { generatePixCode, formatCurrency, generateId, downloadFile, cn } from '@/lib/utils';
+import { useState } from 'react'
+import { Upload, Download, Check, X, CreditCard, Eye, EyeOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Progress } from '@/components/ui/progress'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Separator } from '@/components/ui/separator'
+
+interface MatchResult {
+  id: string
+  name: string
+  cpf: string
+  similarity: number
+  photo: string
+  hasRegistration: boolean
+  platforms: string[]
+}
+
+interface PaymentData {
+  pixCode: string
+  amount: number
+  orderId: string
+}
 
 export default function FacialMatchApp() {
-  const [currentStep, setCurrentStep] = useState<AppStep>('selection');
-  const [selection, setSelection] = useState<UserSelection>({
-    platform: '99 Pop',
-    category: 'Carro',
-    gender: 'Masculino'
-  });
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [matches, setMatches] = useState<MatchResult[]>([]);
-  const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null);
-  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [platform, setPlatform] = useState('')
+  const [category, setCategory] = useState('')
+  const [gender, setGender] = useState('')
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [matchResults, setMatchResults] = useState<MatchResult[]>([])
+  const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null)
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null)
+  const [isPaid, setIsPaid] = useState(false)
+  const [showSensitiveData, setShowSensitiveData] = useState(false)
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setUploadedFile(file);
+    const file = event.target.files?.[0]
+    if (file) {
+      setUploadedFile(file)
     }
-  };
+  }
+
+  const maskCPF = (cpf: string) => {
+    return showSensitiveData ? cpf : `***.***.***-${cpf.slice(-2)}`
+  }
+
+  const maskName = (name: string) => {
+    if (showSensitiveData) return name
+    const parts = name.split(' ')
+    return parts.length > 1 
+      ? `${parts[0]} ${'*'.repeat(parts[1].length)}`
+      : `${name.slice(0, 2)}${'*'.repeat(name.length - 2)}`
+  }
 
   const processImage = async () => {
-    if (!uploadedFile) return;
+    if (!uploadedFile || !platform || !category || !gender) return
+
+    setIsProcessing(true)
     
-    setCurrentStep('processing');
-    setProcessing(true);
-    setProgress(0);
+    // Simular processamento de IA
+    await new Promise(resolve => setTimeout(resolve, 3000))
 
-    // Simula progresso
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return 90;
-        }
-        return prev + 10;
-      });
-    }, 300);
-
-    try {
-      const results = await findFacialMatches(uploadedFile, selection);
-      
-      // Verifica cadastros nas plataformas
-      for (const match of results) {
-        match.hasRegistration = await checkPlatformRegistration(match.cpf, match.platform);
+    // Resultados simulados
+    const mockResults: MatchResult[] = [
+      {
+        id: '1',
+        name: 'João Silva Santos',
+        cpf: '123.456.789-01',
+        similarity: 94.5,
+        photo: '/api/placeholder/150/150',
+        hasRegistration: platform === 'uber',
+        platforms: platform === 'uber' ? ['uber'] : []
+      },
+      {
+        id: '2',
+        name: 'Carlos Eduardo Lima',
+        cpf: '987.654.321-02',
+        similarity: 89.2,
+        photo: '/api/placeholder/150/150',
+        hasRegistration: false,
+        platforms: []
+      },
+      {
+        id: '3',
+        name: 'Roberto Alves Costa',
+        cpf: '456.789.123-03',
+        similarity: 85.7,
+        photo: '/api/placeholder/150/150',
+        hasRegistration: platform === '99pop',
+        platforms: platform === '99pop' ? ['99pop'] : []
       }
-      
-      setMatches(results);
-      setProgress(100);
-      setTimeout(() => {
-        setCurrentStep('results');
-        setProcessing(false);
-      }, 500);
-    } catch (error) {
-      console.error('Erro no processamento:', error);
-      setProcessing(false);
-    }
-  };
+    ]
+
+    setMatchResults(mockResults)
+    setIsProcessing(false)
+  }
 
   const selectMatch = (match: MatchResult) => {
-    setSelectedMatch(match);
+    setSelectedMatch(match)
     
-    // Gera dados de pagamento
+    // Gerar PIX simulado
     const payment: PaymentData = {
-      pixCode: generatePixCode(),
-      amount: PRICING.total,
-      orderId: generateId(),
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutos
-    };
-    
-    setPaymentData(payment);
-    setCurrentStep('payment');
-  };
+      pixCode: `00020126580014BR.GOV.BCB.PIX0136${Math.random().toString(36).substr(2, 32)}5204000053039865802BR5925FACIAL MATCH SYSTEM6009SAO PAULO62070503***6304${Math.random().toString(4).substr(2, 4)}`,
+      amount: 49.90,
+      orderId: `FM${Date.now()}`
+    }
+    setPaymentData(payment)
+  }
 
-  const confirmPayment = () => {
-    setPaymentConfirmed(true);
+  const simulatePayment = () => {
     setTimeout(() => {
-      setCurrentStep('download');
-    }, 2000);
-  };
+      setIsPaid(true)
+    }, 2000)
+  }
 
   const downloadFiles = () => {
-    if (!selectedMatch) return;
-
-    const maskedData = maskSensitiveData(selectedMatch.name, selectedMatch.cpf);
+    // Simular download dos arquivos
+    const photoBlob = new Blob(['Arquivo de foto simulado'], { type: 'image/jpeg' })
+    const textBlob = new Blob([`Dados do arquivo:\nNome: ${maskName(selectedMatch!.name)}\nCPF: ${maskCPF(selectedMatch!.cpf)}\nSimilaridade: ${selectedMatch!.similarity}%`], { type: 'text/plain' })
     
-    // Arquivo de texto com dados mascarados
-    const textContent = `DADOS DO ARQUIVO
-Nome: ${maskedData.name}
-CPF: ${maskedData.cpf}
-Plataforma: ${selectedMatch.platform}
-Categoria: ${selectedMatch.category}
-Similaridade: ${selectedMatch.similarity}%
-Data: ${new Date().toLocaleDateString('pt-BR')}
-
-IMPORTANTE: Este arquivo é confidencial e deve ser usado apenas para os fins acordados.`;
-
-    // Download dos arquivos
-    downloadFile(textContent, `dados_${selectedMatch.id}.txt`);
+    const photoUrl = URL.createObjectURL(photoBlob)
+    const textUrl = URL.createObjectURL(textBlob)
     
-    // Simula download da foto (na prática seria o arquivo real)
-    fetch(selectedMatch.photo)
-      .then(response => response.blob())
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `foto_${selectedMatch.id}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      });
-  };
-
-  const resetApp = () => {
-    setCurrentStep('selection');
-    setUploadedFile(null);
-    setMatches([]);
-    setSelectedMatch(null);
-    setPaymentData(null);
-    setPaymentConfirmed(false);
-    setProgress(0);
-  };
+    const photoLink = document.createElement('a')
+    photoLink.href = photoUrl
+    photoLink.download = `foto_${selectedMatch!.id}.jpg`
+    photoLink.click()
+    
+    const textLink = document.createElement('a')
+    textLink.href = textUrl
+    textLink.download = `dados_${selectedMatch!.id}.txt`
+    textLink.click()
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-blue-900 shadow-lg border-b border-blue-200 dark:border-blue-800">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <img 
-                src="https://k6hrqrxuu8obbfwn.public.blob.vercel-storage.com/temp/c198f448-d048-4077-8563-2f6145ccadf9.jpg" 
-                alt="Logo" 
-                className="h-12 w-auto rounded-lg shadow-md" 
-              />
-              <div>
-                <h1 className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                  Sistema de Comparação Facial
-                </h1>
-                <p className="text-sm text-blue-600 dark:text-blue-300">
-                  Arquivos para motoristas de aplicativo
-                </p>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+      {/* Header com Logo */}
+      <header className="border-b border-orange-500/20 bg-gray-900/50 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <img 
+              src="https://k6hrqrxuu8obbfwn.public.blob.vercel-storage.com/temp/c198f448-d048-4077-8563-2f6145ccadf9.jpg" 
+              alt="Logo" 
+              className="h-12 w-auto rounded-lg shadow-lg shadow-orange-500/20"
+            />
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-400 via-red-400 to-purple-400 bg-clip-text text-transparent">
+                Facial Match System
+              </h1>
+              <p className="text-sm text-gray-400">Sistema de Comparação Facial para Motoristas</p>
             </div>
-            <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
-              <Shield className="w-4 h-4 mr-1" />
-              Dados Protegidos
-            </Badge>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* Etapa 1: Seleção de Opções */}
-        {currentStep === 'selection' && (
-          <div className="space-y-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-                Configure suas Preferências
-              </h2>
-              <p className="text-blue-700 dark:text-blue-300 max-w-2xl mx-auto">
-                Selecione a plataforma, categoria e gênero desejados para encontrar o arquivo ideal
-              </p>
-            </div>
-
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Configurações Iniciais */}
+        <Card className="mb-8 bg-gray-800/50 border-orange-500/20 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-orange-400">Configurações do Perfil</CardTitle>
+            <CardDescription className="text-gray-300">
+              Selecione suas preferências para encontrar o melhor match
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
             <div className="grid md:grid-cols-3 gap-6">
               {/* Plataforma */}
-              <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-                <CardHeader>
-                  <CardTitle className="text-blue-900 dark:text-blue-100 flex items-center">
-                    <Search className="w-5 h-5 mr-2" />
-                    Plataforma
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {PLATFORMS.map((platform) => (
-                    <button
-                      key={platform}
-                      onClick={() => setSelection(prev => ({ ...prev, platform }))}
-                      className={cn(
-                        "w-full p-3 rounded-lg border-2 transition-all duration-300 text-left",
-                        selection.platform === platform
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-800 text-blue-900 dark:text-blue-100"
-                          : "border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600"
-                      )}
-                    >
-                      {platform}
-                    </button>
+              <div className="space-y-3">
+                <Label className="text-orange-300 font-medium">Plataforma</Label>
+                <RadioGroup value={platform} onValueChange={setPlatform}>
+                  {['99pop', 'uber', 'abas'].map((p) => (
+                    <div key={p} className="flex items-center space-x-2">
+                      <RadioGroupItem 
+                        value={p} 
+                        id={p} 
+                        className="border-orange-400 text-orange-400"
+                      />
+                      <Label htmlFor={p} className="capitalize text-gray-200 cursor-pointer">
+                        {p === '99pop' ? '99 Pop' : p.charAt(0).toUpperCase() + p.slice(1)}
+                      </Label>
+                    </div>
                   ))}
-                </CardContent>
-              </Card>
+                </RadioGroup>
+              </div>
 
               {/* Categoria */}
-              <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-                <CardHeader>
-                  <CardTitle className="text-blue-900 dark:text-blue-100 flex items-center">
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Categoria
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {CATEGORIES.map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => setSelection(prev => ({ ...prev, category }))}
-                      className={cn(
-                        "w-full p-3 rounded-lg border-2 transition-all duration-300 text-left",
-                        selection.category === category
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-800 text-blue-900 dark:text-blue-100"
-                          : "border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600"
-                      )}
-                    >
-                      {category}
-                    </button>
+              <div className="space-y-3">
+                <Label className="text-red-300 font-medium">Categoria</Label>
+                <RadioGroup value={category} onValueChange={setCategory}>
+                  {['carro', 'moto'].map((c) => (
+                    <div key={c} className="flex items-center space-x-2">
+                      <RadioGroupItem 
+                        value={c} 
+                        id={c} 
+                        className="border-red-400 text-red-400"
+                      />
+                      <Label htmlFor={c} className="capitalize text-gray-200 cursor-pointer">
+                        {c}
+                      </Label>
+                    </div>
                   ))}
-                </CardContent>
-              </Card>
+                </RadioGroup>
+              </div>
 
               {/* Gênero */}
-              <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-                <CardHeader>
-                  <CardTitle className="text-blue-900 dark:text-blue-100 flex items-center">
-                    <Shield className="w-5 h-5 mr-2" />
-                    Gênero
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {GENDERS.map((gender) => (
-                    <button
-                      key={gender}
-                      onClick={() => setSelection(prev => ({ ...prev, gender }))}
-                      className={cn(
-                        "w-full p-3 rounded-lg border-2 transition-all duration-300 text-left",
-                        selection.gender === gender
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-800 text-blue-900 dark:text-blue-100"
-                          : "border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600"
-                      )}
-                    >
-                      {gender}
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="text-center">
-              <Button 
-                onClick={() => setCurrentStep('upload')}
-                size="lg"
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3"
-              >
-                Continuar para Upload
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Etapa 2: Upload da Foto */}
-        {currentStep === 'upload' && (
-          <div className="max-w-2xl mx-auto space-y-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-                Envie sua Foto
-              </h2>
-              <p className="text-blue-700 dark:text-blue-300">
-                Faça upload de uma foto clara do rosto para comparação
-              </p>
-            </div>
-
-            <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-              <CardContent className="p-8">
-                <div className="border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-lg p-8 text-center">
-                  {uploadedFile ? (
-                    <div className="space-y-4">
-                      <div className="w-32 h-32 mx-auto rounded-lg overflow-hidden">
-                        <img 
-                          src={URL.createObjectURL(uploadedFile)} 
-                          alt="Preview" 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <p className="text-blue-900 dark:text-blue-100 font-medium">
-                        {uploadedFile.name}
-                      </p>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => setUploadedFile(null)}
-                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                      >
-                        Trocar Foto
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <Upload className="w-16 h-16 mx-auto text-blue-400" />
-                      <div>
-                        <p className="text-blue-900 dark:text-blue-100 font-medium mb-2">
-                          Clique para selecionar uma foto
-                        </p>
-                        <p className="text-sm text-blue-600 dark:text-blue-400">
-                          Formatos aceitos: JPG, PNG (máx. 5MB)
-                        </p>
-                      </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        id="photo-upload"
+              <div className="space-y-3">
+                <Label className="text-purple-300 font-medium">Gênero</Label>
+                <RadioGroup value={gender} onValueChange={setGender}>
+                  {['masculino', 'feminino'].map((g) => (
+                    <div key={g} className="flex items-center space-x-2">
+                      <RadioGroupItem 
+                        value={g} 
+                        id={g} 
+                        className="border-purple-400 text-purple-400"
                       />
-                      <label htmlFor="photo-upload">
-                        <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
-                          <span>Selecionar Foto</span>
-                        </Button>
-                      </label>
+                      <Label htmlFor={g} className="capitalize text-gray-200 cursor-pointer">
+                        {g}
+                      </Label>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {uploadedFile && (
-              <div className="flex justify-center space-x-4">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setCurrentStep('selection')}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                >
-                  Voltar
-                </Button>
-                <Button 
-                  onClick={processImage}
-                  size="lg"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-                >
-                  Processar Imagem
-                </Button>
+                  ))}
+                </RadioGroup>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Etapa 3: Processamento */}
-        {currentStep === 'processing' && (
-          <div className="max-w-2xl mx-auto space-y-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-                Processando Imagem
-              </h2>
-              <p className="text-blue-700 dark:text-blue-300">
-                Comparando com nossa base de dados...
-              </p>
             </div>
+          </CardContent>
+        </Card>
 
-            <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-              <CardContent className="p-8 text-center space-y-6">
-                <div className="w-16 h-16 mx-auto border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        {/* Upload de Foto */}
+        <Card className="mb-8 bg-gray-800/50 border-orange-500/20 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-orange-400">Upload da Foto</CardTitle>
+            <CardDescription className="text-gray-300">
+              Envie uma foto clara do rosto para comparação
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-orange-500/30 rounded-lg p-8 text-center hover:border-orange-500/50 transition-colors">
+                <Upload className="mx-auto h-12 w-12 text-orange-400 mb-4" />
                 <div className="space-y-2">
-                  <Progress value={progress} className="w-full" />
-                  <p className="text-sm text-blue-600 dark:text-blue-400">
-                    {progress}% concluído
-                  </p>
-                </div>
-                <p className="text-blue-700 dark:text-blue-300">
-                  Analisando características faciais e buscando correspondências...
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Etapa 4: Resultados */}
-        {currentStep === 'results' && (
-          <div className="space-y-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-                Resultados Encontrados
-              </h2>
-              <p className="text-blue-700 dark:text-blue-300">
-                Encontramos {matches.length} correspondência(s) para suas preferências
-              </p>
-            </div>
-
-            {matches.length > 0 ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {matches.map((match) => (
-                  <Card key={match.id} className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300">
-                    <CardContent className="p-6">
-                      <div className="space-y-4">
-                        <div className="w-full h-48 rounded-lg overflow-hidden">
-                          <img 
-                            src={match.photo} 
-                            alt="Correspondência" 
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <Badge 
-                              variant={match.similarity >= 90 ? "default" : "secondary"}
-                              className="bg-blue-100 text-blue-800"
-                            >
-                              {match.similarity}% Similar
-                            </Badge>
-                            {!match.hasRegistration && (
-                              <Badge variant="outline" className="text-green-600 border-green-300">
-                                <Check className="w-3 h-3 mr-1" />
-                                Disponível
-                              </Badge>
-                            )}
-                            {match.hasRegistration && (
-                              <Badge variant="destructive">
-                                <X className="w-3 h-3 mr-1" />
-                                Cadastrado
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <div className="text-sm text-blue-600 dark:text-blue-400 space-y-1">
-                            <p><strong>Plataforma:</strong> {match.platform}</p>
-                            <p><strong>Categoria:</strong> {match.category}</p>
-                            <p><strong>Gênero:</strong> {match.gender}</p>
-                          </div>
-                        </div>
-
-                        {!match.hasRegistration && (
-                          <Button 
-                            onClick={() => selectMatch(match)}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                          >
-                            Selecionar Arquivo
-                          </Button>
-                        )}
-                        
-                        {match.hasRegistration && (
-                          <Button 
-                            disabled
-                            variant="outline"
-                            className="w-full opacity-50 cursor-not-allowed"
-                          >
-                            Já Cadastrado na Plataforma
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-                <CardContent className="p-8 text-center">
-                  <X className="w-16 h-16 mx-auto text-blue-400 mb-4" />
-                  <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    Nenhuma correspondência encontrada
-                  </h3>
-                  <p className="text-blue-600 dark:text-blue-400 mb-6">
-                    Não encontramos arquivos disponíveis para suas preferências
-                  </p>
-                  <Button 
-                    onClick={() => setCurrentStep('selection')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    Tentar Novamente
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="text-center">
-              <Button 
-                variant="outline" 
-                onClick={() => setCurrentStep('upload')}
-                className="border-blue-300 text-blue-700 hover:bg-blue-50"
-              >
-                Voltar ao Upload
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Etapa 5: Pagamento */}
-        {currentStep === 'payment' && paymentData && selectedMatch && (
-          <div className="max-w-2xl mx-auto space-y-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-                Finalizar Pagamento
-              </h2>
-              <p className="text-blue-700 dark:text-blue-300">
-                Complete o pagamento para receber seus arquivos
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Resumo do Pedido */}
-              <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-                <CardHeader>
-                  <CardTitle className="text-blue-900 dark:text-blue-100">
-                    Resumo do Pedido
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="w-24 h-24 rounded-lg overflow-hidden mx-auto">
-                    <img 
-                      src={selectedMatch.photo} 
-                      alt="Arquivo selecionado" 
-                      className="w-full h-full object-cover"
+                  <Label htmlFor="photo-upload" className="cursor-pointer">
+                    <span className="text-orange-300 hover:text-orange-200 font-medium">
+                      Clique para enviar uma foto
+                    </span>
+                    <input
+                      id="photo-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
                     />
-                  </div>
-                  
-                  <div className="text-center space-y-2">
-                    <Badge className="bg-blue-100 text-blue-800">
-                      {selectedMatch.similarity}% Similar
-                    </Badge>
-                    <div className="text-sm text-blue-600 dark:text-blue-400">
-                      <p>{selectedMatch.platform} • {selectedMatch.category}</p>
-                      <p>{selectedMatch.gender}</p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-blue-200 dark:border-blue-700 pt-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="flex items-center text-sm">
-                        <ImageIcon className="w-4 h-4 mr-1" />
-                        Arquivo de Foto
-                      </span>
-                      <span>{formatCurrency(PRICING.photoFile)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="flex items-center text-sm">
-                        <FileText className="w-4 h-4 mr-1" />
-                        Arquivo de Texto
-                      </span>
-                      <span>{formatCurrency(PRICING.textFile)}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-lg border-t border-blue-200 dark:border-blue-700 pt-2">
-                      <span>Total</span>
-                      <span>{formatCurrency(PRICING.total)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* PIX */}
-              <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-                <CardHeader>
-                  <CardTitle className="text-blue-900 dark:text-blue-100">
-                    Pagamento PIX
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {!paymentConfirmed ? (
-                    <>
-                      <div className="bg-blue-50 dark:bg-blue-800 p-4 rounded-lg">
-                        <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-                          Código PIX:
-                        </p>
-                        <code className="text-xs bg-white dark:bg-blue-900 p-2 rounded block break-all">
-                          {paymentData.pixCode}
-                        </code>
-                      </div>
-
-                      <Alert>
-                        <AlertDescription>
-                          Escaneie o código QR ou copie o código PIX acima para realizar o pagamento
-                        </AlertDescription>
-                      </Alert>
-
-                      <div className="text-center space-y-4">
-                        <div className="w-48 h-48 bg-blue-100 dark:bg-blue-800 rounded-lg mx-auto flex items-center justify-center">
-                          <div className="text-center">
-                            <div className="w-32 h-32 bg-white dark:bg-blue-900 rounded-lg mb-2 flex items-center justify-center">
-                              <span className="text-xs text-blue-600">QR Code</span>
-                            </div>
-                            <p className="text-xs text-blue-600 dark:text-blue-400">
-                              Código simulado
-                            </p>
-                          </div>
-                        </div>
-
-                        <Button 
-                          onClick={confirmPayment}
-                          className="w-full bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          Simular Pagamento Confirmado
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center space-y-4">
-                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                        <Check className="w-8 h-8 text-green-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-green-600 mb-2">
-                          Pagamento Confirmado!
-                        </h3>
-                        <p className="text-sm text-blue-600 dark:text-blue-400">
-                          Redirecionando para download...
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
-
-        {/* Etapa 6: Download */}
-        {currentStep === 'download' && selectedMatch && (
-          <div className="max-w-2xl mx-auto space-y-8">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-blue-900 dark:text-blue-100 mb-4">
-                Download dos Arquivos
-              </h2>
-              <p className="text-blue-700 dark:text-blue-300">
-                Seus arquivos estão prontos para download
-              </p>
-            </div>
-
-            <Card className="bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800">
-              <CardContent className="p-8 space-y-6">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Check className="w-8 h-8 text-green-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    Pagamento Aprovado!
-                  </h3>
-                  <p className="text-blue-600 dark:text-blue-400">
-                    Clique nos botões abaixo para baixar seus arquivos
-                  </p>
+                  </Label>
+                  <p className="text-sm text-gray-400">PNG, JPG até 10MB</p>
                 </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <Button 
-                    onClick={downloadFiles}
-                    className="bg-blue-600 hover:bg-blue-700 text-white h-16"
-                  >
-                    <Download className="w-5 h-5 mr-2" />
-                    <div className="text-left">
-                      <div className="font-semibold">Baixar Arquivos</div>
-                      <div className="text-xs opacity-90">Foto + Dados</div>
-                    </div>
-                  </Button>
-
-                  <Button 
-                    variant="outline"
-                    onClick={resetApp}
-                    className="border-blue-300 text-blue-700 hover:bg-blue-50 h-16"
-                  >
-                    <Search className="w-5 h-5 mr-2" />
-                    <div className="text-left">
-                      <div className="font-semibold">Nova Busca</div>
-                      <div className="text-xs opacity-70">Buscar outros arquivos</div>
-                    </div>
-                  </Button>
-                </div>
-
-                <Alert>
-                  <Shield className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Dados Protegidos:</strong> Os arquivos contêm informações mascaradas para sua segurança. 
-                    Use apenas para os fins acordados.
+              </div>
+              
+              {uploadedFile && (
+                <Alert className="bg-green-900/20 border-green-500/30">
+                  <Check className="h-4 w-4 text-green-400" />
+                  <AlertDescription className="text-green-300">
+                    Arquivo carregado: {uploadedFile.name}
                   </AlertDescription>
                 </Alert>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </main>
+              )}
 
-      {/* Footer */}
-      <footer className="bg-white dark:bg-blue-900 border-t border-blue-200 dark:border-blue-800 mt-16">
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="text-center text-sm text-blue-600 dark:text-blue-400">
-            <p>© 2024 Sistema de Comparação Facial. Todos os direitos reservados.</p>
-            <p className="mt-2">Dados protegidos com criptografia de ponta a ponta</p>
-          </div>
-        </div>
-      </footer>
+              <Button 
+                onClick={processImage}
+                disabled={!uploadedFile || !platform || !category || !gender || isProcessing}
+                className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium py-3"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Processando...
+                  </>
+                ) : (
+                  'Iniciar Comparação'
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Resultados */}
+        {matchResults.length > 0 && (
+          <Card className="mb-8 bg-gray-800/50 border-orange-500/20 backdrop-blur-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-orange-400">Resultados da Comparação</CardTitle>
+                <CardDescription className="text-gray-300">
+                  Encontramos {matchResults.length} possíveis matches
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSensitiveData(!showSensitiveData)}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                {showSensitiveData ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {matchResults.map((result) => (
+                  <div 
+                    key={result.id} 
+                    className="border border-gray-700 rounded-lg p-4 hover:border-orange-500/50 transition-colors cursor-pointer"
+                    onClick={() => selectMatch(result)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-gray-700 rounded-lg flex items-center justify-center">
+                          <span className="text-2xl">👤</span>
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-white">{maskName(result.name)}</h3>
+                          <p className="text-sm text-gray-400">CPF: {maskCPF(result.cpf)}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={result.similarity} className="w-24 h-2" />
+                            <span className="text-sm font-medium text-orange-400">
+                              {result.similarity}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {result.hasRegistration ? (
+                          <Badge variant="destructive" className="bg-red-900/50 text-red-300 border-red-500/30">
+                            Cadastrado
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-green-900/50 text-green-300 border-green-500/30">
+                            Disponível
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pagamento */}
+        {selectedMatch && paymentData && !isPaid && (
+          <Card className="mb-8 bg-gray-800/50 border-orange-500/20 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-orange-400">Pagamento PIX</CardTitle>
+              <CardDescription className="text-gray-300">
+                Complete o pagamento para receber os arquivos
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-gray-900/50 p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-300">Arquivo selecionado:</span>
+                  <span className="text-white font-medium">{maskName(selectedMatch.name)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-300">Similaridade:</span>
+                  <span className="text-orange-400 font-medium">{selectedMatch.similarity}%</span>
+                </div>
+                <Separator className="my-3 bg-gray-700" />
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300">Valor:</span>
+                  <span className="text-2xl font-bold text-green-400">R$ {paymentData.amount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="bg-gray-900/50 p-4 rounded-lg">
+                <p className="text-sm text-gray-400 mb-2">Código PIX:</p>
+                <code className="text-xs bg-gray-800 p-2 rounded block break-all text-gray-300">
+                  {paymentData.pixCode}
+                </code>
+              </div>
+
+              <Button 
+                onClick={simulatePayment}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium py-3"
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Simular Pagamento
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Download */}
+        {isPaid && selectedMatch && (
+          <Card className="bg-gray-800/50 border-green-500/20 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-green-400">Pagamento Confirmado!</CardTitle>
+              <CardDescription className="text-gray-300">
+                Seus arquivos estão prontos para download
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Alert className="mb-4 bg-green-900/20 border-green-500/30">
+                <Check className="h-4 w-4 text-green-400" />
+                <AlertDescription className="text-green-300">
+                  Pagamento processado com sucesso. Pedido: {paymentData?.orderId}
+                </AlertDescription>
+              </Alert>
+
+              <div className="bg-gray-900/50 p-4 rounded-lg mb-4">
+                <h4 className="font-medium text-white mb-2">Arquivos inclusos:</h4>
+                <ul className="space-y-1 text-sm text-gray-300">
+                  <li>• Foto de alta qualidade</li>
+                  <li>• Arquivo de texto com dados (mascarados)</li>
+                  <li>• Certificado de similaridade</li>
+                </ul>
+              </div>
+
+              <Button 
+                onClick={downloadFiles}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium py-3"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar Arquivos
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
-  );
+  )
 }
