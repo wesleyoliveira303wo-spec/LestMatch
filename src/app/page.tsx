@@ -32,6 +32,7 @@ export default function FacialMatchApp() {
   const [category, setCategory] = useState('')
   const [gender, setGender] = useState('')
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [matchResults, setMatchResults] = useState<MatchResult[]>([])
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null)
@@ -43,6 +44,10 @@ export default function FacialMatchApp() {
     const file = event.target.files?.[0]
     if (file) {
       setUploadedFile(file)
+      
+      // Criar URL para preview da imagem
+      const imageUrl = URL.createObjectURL(file)
+      setUploadedImageUrl(imageUrl)
     }
   }
 
@@ -120,9 +125,16 @@ export default function FacialMatchApp() {
   }
 
   const downloadFiles = () => {
-    // Simular download dos arquivos
+    // Simular download dos arquivos SEM nome e CPF
     const photoBlob = new Blob(['Arquivo de foto simulado'], { type: 'image/jpeg' })
-    const textBlob = new Blob([`Dados do arquivo:\nNome: ${maskName(selectedMatch!.name)}\nCPF: ${maskCPF(selectedMatch!.cpf)}\nSimilaridade: ${selectedMatch!.similarity}%`], { type: 'text/plain' })
+    const textBlob = new Blob([`Dados do arquivo:
+Similaridade: ${selectedMatch!.similarity}%
+Plataforma: ${platform}
+Categoria: ${category}
+Gênero: ${gender}
+Data da análise: ${new Date().toLocaleString()}
+ID do arquivo: ${selectedMatch!.id}
+Status: ${selectedMatch!.hasRegistration ? 'Cadastrado' : 'Disponível'}`], { type: 'text/plain' })
     
     const photoUrl = URL.createObjectURL(photoBlob)
     const textUrl = URL.createObjectURL(textBlob)
@@ -174,7 +186,7 @@ export default function FacialMatchApp() {
               <div className="space-y-3">
                 <Label className="text-orange-300 font-medium">Plataforma</Label>
                 <RadioGroup value={platform} onValueChange={setPlatform}>
-                  {['99pop', 'uber', 'abas'].map((p) => (
+                  {['99pop', 'uber'].map((p) => (
                     <div key={p} className="flex items-center space-x-2">
                       <RadioGroupItem 
                         value={p} 
@@ -240,13 +252,26 @@ export default function FacialMatchApp() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="border-2 border-dashed border-orange-500/30 rounded-lg p-8 text-center hover:border-orange-500/50 transition-colors">
-                <Upload className="mx-auto h-12 w-12 text-orange-400 mb-4" />
-                <div className="space-y-2">
+              <div className="flex flex-col items-center space-y-4">
+                {/* Botão de Upload Redondo */}
+                <div className="relative">
                   <Label htmlFor="photo-upload" className="cursor-pointer">
-                    <span className="text-orange-300 hover:text-orange-200 font-medium">
-                      Clique para enviar uma foto
-                    </span>
+                    <div className="w-32 h-32 rounded-full border-4 border-dashed border-orange-500/30 hover:border-orange-500/50 transition-colors flex items-center justify-center bg-gray-900/30 overflow-hidden">
+                      {uploadedImageUrl ? (
+                        <img 
+                          src={uploadedImageUrl} 
+                          alt="Foto enviada" 
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      ) : (
+                        <div className="text-center">
+                          <Upload className="mx-auto h-8 w-8 text-orange-400 mb-2" />
+                          <span className="text-xs text-orange-300 font-medium">
+                            Clique para enviar
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <input
                       id="photo-upload"
                       type="file"
@@ -255,8 +280,11 @@ export default function FacialMatchApp() {
                       className="hidden"
                     />
                   </Label>
-                  <p className="text-sm text-gray-400">PNG, JPG até 10MB</p>
                 </div>
+                
+                <p className="text-sm text-gray-400 text-center">
+                  PNG, JPG até 10MB
+                </p>
               </div>
               
               {uploadedFile && (
@@ -412,8 +440,8 @@ export default function FacialMatchApp() {
               <div className="bg-gray-900/50 p-4 rounded-lg mb-4">
                 <h4 className="font-medium text-white mb-2">Arquivos inclusos:</h4>
                 <ul className="space-y-1 text-sm text-gray-300">
-                  <li>• Foto de alta qualidade</li>
-                  <li>• Arquivo de texto com dados (mascarados)</li>
+                  <li>• Foto de alta qualidade (JPG)</li>
+                  <li>• Arquivo de texto com dados técnicos</li>
                   <li>• Certificado de similaridade</li>
                 </ul>
               </div>
