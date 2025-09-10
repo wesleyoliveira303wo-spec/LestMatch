@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Upload, Download, Check, X, CreditCard, Eye, EyeOff } from 'lucide-react'
+import { Upload, Download, Check, X, CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -38,7 +38,6 @@ export default function FacialMatchApp() {
   const [selectedMatch, setSelectedMatch] = useState<MatchResult | null>(null)
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null)
   const [isPaid, setIsPaid] = useState(false)
-  const [showSensitiveData, setShowSensitiveData] = useState(false)
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -52,11 +51,10 @@ export default function FacialMatchApp() {
   }
 
   const maskCPF = (cpf: string) => {
-    return showSensitiveData ? cpf : `***.***.***-${cpf.slice(-2)}`
+    return `***.***.***-${cpf.slice(-2)}`
   }
 
   const maskName = (name: string) => {
-    if (showSensitiveData) return name
     const parts = name.split(' ')
     return parts.length > 1 
       ? `${parts[0]} ${'*'.repeat(parts[1].length)}`
@@ -125,28 +123,42 @@ export default function FacialMatchApp() {
   }
 
   const downloadFiles = () => {
-    // Simular download dos arquivos SEM nome e CPF
+    if (!selectedMatch) return
+
+    // Criar arquivos sem dados sensíveis
+    const analysisData = {
+      similarity: selectedMatch.similarity,
+      platform: platform,
+      category: category,
+      gender: gender,
+      analysisDate: new Date().toISOString(),
+      fileId: selectedMatch.id
+    }
+
     const photoBlob = new Blob(['Arquivo de foto simulado'], { type: 'image/jpeg' })
-    const textBlob = new Blob([`Dados do arquivo:
-Similaridade: ${selectedMatch!.similarity}%
-Plataforma: ${platform}
-Categoria: ${category}
-Gênero: ${gender}
-Data da análise: ${new Date().toLocaleString()}
-ID do arquivo: ${selectedMatch!.id}
-Status: ${selectedMatch!.hasRegistration ? 'Cadastrado' : 'Disponível'}`], { type: 'text/plain' })
+    const textBlob = new Blob([
+      `Relatório de Análise Facial\n` +
+      `========================\n` +
+      `ID do Arquivo: ${analysisData.fileId}\n` +
+      `Similaridade: ${analysisData.similarity}%\n` +
+      `Plataforma: ${analysisData.platform}\n` +
+      `Categoria: ${analysisData.category}\n` +
+      `Gênero: ${analysisData.gender}\n` +
+      `Data da Análise: ${new Date(analysisData.analysisDate).toLocaleString('pt-BR')}\n` +
+      `\nObservação: Dados pessoais protegidos conforme LGPD`
+    ], { type: 'text/plain' })
     
     const photoUrl = URL.createObjectURL(photoBlob)
     const textUrl = URL.createObjectURL(textBlob)
     
     const photoLink = document.createElement('a')
     photoLink.href = photoUrl
-    photoLink.download = `foto_${selectedMatch!.id}.jpg`
+    photoLink.download = `foto_${selectedMatch.id}.jpg`
     photoLink.click()
     
     const textLink = document.createElement('a')
     textLink.href = textUrl
-    textLink.download = `dados_${selectedMatch!.id}.txt`
+    textLink.download = `relatorio_${selectedMatch.id}.txt`
     textLink.click()
   }
 
@@ -317,21 +329,11 @@ Status: ${selectedMatch!.hasRegistration ? 'Cadastrado' : 'Disponível'}`], { ty
         {/* Resultados */}
         {matchResults.length > 0 && (
           <Card className="mb-8 bg-gray-800/50 border-orange-500/20 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-orange-400">Resultados da Comparação</CardTitle>
-                <CardDescription className="text-gray-300">
-                  Encontramos {matchResults.length} possíveis matches
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowSensitiveData(!showSensitiveData)}
-                className="border-gray-600 text-gray-300 hover:bg-gray-700"
-              >
-                {showSensitiveData ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </Button>
+            <CardHeader>
+              <CardTitle className="text-orange-400">Resultados da Comparação</CardTitle>
+              <CardDescription className="text-gray-300">
+                Encontramos {matchResults.length} possíveis matches
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -441,7 +443,7 @@ Status: ${selectedMatch!.hasRegistration ? 'Cadastrado' : 'Disponível'}`], { ty
                 <h4 className="font-medium text-white mb-2">Arquivos inclusos:</h4>
                 <ul className="space-y-1 text-sm text-gray-300">
                   <li>• Foto de alta qualidade (JPG)</li>
-                  <li>• Arquivo de texto com dados técnicos</li>
+                  <li>• Relatório de análise (sem dados pessoais)</li>
                   <li>• Certificado de similaridade</li>
                 </ul>
               </div>
